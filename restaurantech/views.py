@@ -13,8 +13,15 @@ def cozinha(request):
 
 # 2. TELA DA MESA (CLIENTE)
 def mesa(request):
-    """Renderiza a página do tablet da mesa para o cliente fazer o pedido."""
-    return render(request, 'restaurantech/mesa.html')
+    """Busca as categorias e produtos ativos para exibir no cardápio."""
+    categorias = Categoria.objects.all()
+    produtos = Produto.objects.filter(disponivel=True)
+    
+    contexto = {
+        'categorias': categorias,
+        'produtos': produtos,
+    }
+    return render(request, 'restaurantech/mesa.html', contexto)
 
 # 3. ROTA DE PROCESSAMENTO DO PEDIDO
 @csrf_exempt

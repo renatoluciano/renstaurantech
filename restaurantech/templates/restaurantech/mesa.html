@@ -2,53 +2,94 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Tablet da Mesa</title>
+    <title>Cardápio Digital - Mesa 1</title>
     <style>
-        body { font-family: sans-serif; background: #f4f4f4; color: #333; text-align: center; padding: 50px; }
-        .order-btn { background: #27ae60; color: white; padding: 15px 30px; font-size: 20px; border: none; border-radius: 5px; cursor: pointer; }
-        .order-btn:hover { background: #219653; }
-        .status { margin-top: 20px; font-weight: bold; color: #27ae60; }
+        body { font-family: sans-serif; background: #f9f9f9; color: #333; margin: 0; display: flex; }
+        .cardapio { flex: 3; padding: 20px; }
+        .carrinho { flex: 1; background: #fff; border-left: 1px solid #ddd; padding: 20px; height: 100vh; position: sticky; top: 0; }
+        .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .item-produto { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
+        .add-btn { background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .enviar-btn { background: #e67e22; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
     </style>
 </head>
 <body>
-    {% csrf_token %} 
 
-    <h1>📱 Mesa 1</h1>
-    <p>Clique no botão abaixo para simular um pedido e enviar para a cozinha.</p>
-    
-    <button class="order-btn" onclick="fazerPedido()">Fazer Pedido (1x Hambúrguer + 1x Refrigerante)</button>
-    <div id="msg-status" class="status"></div>
+    <!-- LADO ESQUERDO: CARDÁPIO -->
+    <div class="cardapio">
+        <h1>🍽️ Cardápio Digital - Mesa 1</h1>
+        
+        {% for categoria in categorias %}
+            <h2>{{ categoria.nome }}</h2>
+            <div class="grid-produtos">
+                {% for produto in produtos %}
+                    {% if produto.categoria == categoria %}
+                        <div class="item-produto">
+                            <h3>{{ produto.nome }}</h3>
+                            <p>{{ produto.descricao }}</p>
+                            <p><strong>R$ {{ produto.preco }}</strong></p>
+                            <button class="add-btn" onclick="adicionarAoCarrinho('{{ produto.id }}', '{{ produto.nome }}', '{{ produto.preco }}')">Adicionar</button>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- LADO DIREITO: CARRINHO -->
+    <div class="carrinho">
+        <h2>🛒 Seu Pedido</h2>
+        <ul id="lista-carrinho" style="padding-left: 20px;">
+            <!-- Itens entram aqui -->
+        </ul>
+        <hr>
+        <h3>Total: R$ <span id="total-conta">0.00</span></h3>
+        <button class="enviar-btn" onclick="finalizarPedido()">Enviar para Cozinha</button>
+    </div>
 
     <script>
-    function fazerPedido() {
-        const btn = document.querySelector('.order-btn');
-        btn.disabled = true;
-        btn.innerText = "Enviando...";
+        let carrinho = [];
 
-        // Pega o token direto da tag que colocamos lá em cima
-        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        function adicionarAoCarrinho(id, nome, preco) {
+            carrinho.push({ id, nome, preco: parseFloat(preco) });
+            atualizarVisualCarrinho();
+        }
 
-        fetch('/fazer-pedido/', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken // Passa a prova de segurança para o Django
+        function atualizarVisualCarrinho() {
+            const lista = document.getElementById('lista-carrinho');
+            const totalSpan = document.getElementById('total-conta');
+            lista.innerHTML = '';
+            
+            let total = 0;
+            carrinho.forEach(item => {
+                const li = document.createElement('li');
+                li.innerText = `${item.nome} - R$ ${item.preco.toFixed(2)}`;
+                lista.appendChild(li);
+                total += item.preco;
+            });
+            
+            totalSpan.innerText = total.toFixed(2);
+        }
+
+        function finalizarPedido() {
+            if (carrinho.length === 0) {
+                alert("O seu carrinho está vazio!");
+                return;
             }
-        })
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('msg-status').innerText = "Pedido enviado com sucesso para a cozinha!";
-            btn.innerText = "Fazer Outro Pedido";
-            btn.disabled = false;
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            document.getElementById('msg-status').innerText = "Erro ao enviar pedido!";
-            btn.disabled = false;
-            btn.innerText = "Tentar Novamente";
-        });
-    }
-</script>
-
+            
+            // Aqui estamos enviando a lista dinâmica que o usuário montou!
+            fetch('/fazer-pedido/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ itens: carrinho })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert("Pedido enviado com sucesso!");
+                carrinho = [];
+                atualizarVisualCarrinho();
+            });
+        }
+    </script>
 </body>
 </html>

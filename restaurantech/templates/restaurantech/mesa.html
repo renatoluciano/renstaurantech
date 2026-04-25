@@ -11,6 +11,8 @@
     </style>
 </head>
 <body>
+    {% csrf_token %} 
+
     <h1>📱 Mesa 1</h1>
     <p>Clique no botão abaixo para simular um pedido e enviar para a cozinha.</p>
     
@@ -18,27 +20,35 @@
     <div id="msg-status" class="status"></div>
 
     <script>
-        function fazerPedido() {
-            const btn = document.querySelector('.order-btn');
-            btn.disabled = true;
-            btn.innerText = "Enviando...";
+    function fazerPedido() {
+        const btn = document.querySelector('.order-btn');
+        btn.disabled = true;
+        btn.innerText = "Enviando...";
 
-            fetch('/fazer-pedido/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('msg-status').innerText = "Pedido enviado com sucesso para a cozinha!";
-                btn.innerText = "Fazer Outro Pedido";
-                btn.disabled = false;
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                btn.disabled = false;
-                btn.innerText = "Tentar Novamente";
-            });
-        }
-    </script>
+        // Pega o token direto da tag que colocamos lá em cima
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        fetch('/fazer-pedido/', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken // Passa a prova de segurança para o Django
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('msg-status').innerText = "Pedido enviado com sucesso para a cozinha!";
+            btn.innerText = "Fazer Outro Pedido";
+            btn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            document.getElementById('msg-status').innerText = "Erro ao enviar pedido!";
+            btn.disabled = false;
+            btn.innerText = "Tentar Novamente";
+        });
+    }
+</script>
+
 </body>
 </html>

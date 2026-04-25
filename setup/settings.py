@@ -20,6 +20,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # <-- DEVE ser o primeiro da lista!
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -30,6 +31,8 @@ INSTALLED_APPS = [
     # Seu novo app aqui:
     'restaurantech',
 ]
+
+ASGI_APPLICATION = 'setup.asgi.application'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

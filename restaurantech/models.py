@@ -1,7 +1,8 @@
 from django.db import models
 
+from django.db import models
+
 class Mesa(models.Model):
-    # Opções de status para a mesa
     STATUS_CHOICES = [
         ('LIVRE', 'Livre'),
         ('OCUPADA', 'Ocupada'),
@@ -16,8 +17,22 @@ class Mesa(models.Model):
         default='LIVRE'
     )
 
+    # NOVO MÉTODO AQUI:
+    @property
+    def total_da_conta(self):
+        # Busca todos os pedidos dessa mesa que não foram finalizados (status 'RECEBIDO', 'PREPARANDO' ou 'PRONTO')
+        pedidos = self.pedido_set.filter(status__in=['RECEBIDO', 'PREPARANDO', 'PRONTO'])
+        
+        total = 0
+        for pedido in pedidos:
+            for item in pedido.itens.all():
+                total += item.produto.preco * item.quantidade
+                
+        return total
+
     def __str__(self):
-        return f"Mesa {self.numero}"
+        return f"Mesa {self.numero} - Total Atual: R$ {self.total_da_conta}"
+
     
 class Categoria(models.Model):
     nome = models.CharField(max_length=50, unique=True)

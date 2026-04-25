@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Cardápio Digital - Mesa 1</title>
+    <title>Cardápio Digital - Mesa {{ numero_mesa }}</title>
     <style>
         body { font-family: sans-serif; background: #f9f9f9; color: #333; margin: 0; display: flex; }
         .cardapio { flex: 3; padding: 20px; }
@@ -18,7 +18,7 @@
 
     <!-- LADO ESQUERDO: CARDÁPIO -->
     <div class="cardapio">
-        <h1>🍽️ Cardápio Digital - Mesa 1</h1>
+        <h1>🍽️ Cardápio Digital - Mesa {{ numero_mesa }}</h1>
         
         {% for categoria in categorias %}
             <h2>{{ categoria.nome }}</h2>
@@ -54,6 +54,12 @@
 
         function adicionarAoCarrinho(id, nome, preco) {
             carrinho.push({ id, nome, preco: parseFloat(preco) });
+            
+            // Reativa o botão de pedir conta caso novos itens sejam adicionados
+            const contaBtn = document.getElementById('conta-btn');
+            contaBtn.disabled = false;
+            contaBtn.innerText = "Pedir a Conta";
+            
             atualizarVisualCarrinho();
         }
 
@@ -81,7 +87,8 @@
             
             const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-            fetch('/fazer-pedido/', {
+            // URL Dinâmica apontando para a mesa acessada
+            fetch('/fazer-pedido/{{ numero_mesa }}/', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -113,7 +120,8 @@
 
             const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-            fetch('/pedir-conta/', {
+            // URL Dinâmica apontando para a mesa acessada
+            fetch('/pedir-conta/{{ numero_mesa }}/', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -121,7 +129,6 @@
                 }
             })
             .then(response => {
-                // Se o servidor recusar (como erro 400), ele cai aqui
                 if (!response.ok) {
                     return response.json().then(err => { throw err; });
                 }
@@ -135,7 +142,6 @@
                 }
             })
             .catch(error => {
-                // Exibe a mensagem exata que o Django enviou ("Você não pode pedir a conta sem ter consumido...")
                 alert(error.mensagem || "Ocorreu um erro ao solicitar a conta.");
                 console.error('Erro:', error);
             });

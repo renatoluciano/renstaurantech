@@ -12,7 +12,7 @@ def cozinha(request):
     return render(request, 'restaurantech/cozinha.html')
 
 # 2. TELA DA MESA (CLIENTE)
-def mesa(request):
+def mesa(request, numero_mesa):
     """Busca as categorias e produtos ativos para exibir no cardápio."""
     categorias = Categoria.objects.all()
     produtos = Produto.objects.filter(disponivel=True)
@@ -20,12 +20,13 @@ def mesa(request):
     contexto = {
         'categorias': categorias,
         'produtos': produtos,
+        'numero_mesa': numero_mesa,
     }
     return render(request, 'restaurantech/mesa.html', contexto)
 
 # 3. ROTA DE PROCESSAMENTO DO PEDIDO
 @csrf_exempt
-def fazer_pedido(request):
+def fazer_pedido(request, numero_mesa):
     """Processa a lista dinâmica do carrinho, salva no banco e avisa a cozinha."""
     if request.method == 'POST':
         try:
@@ -35,17 +36,17 @@ def fazer_pedido(request):
             if not itens_carrinho:
                 return JsonResponse({'status': 'erro', 'mensagem': 'Carrinho vazio'}, status=400)
 
-            # Encontra ou cria a mesa 1 para os testes
-            mesa_obj, _ = Mesa.objects.get_or_create(numero=1, defaults={'capacidade': 4})
+            # Encontra ou cria a mesa especificada na URL
+            mesa_obj, _ = Mesa.objects.get_or_create(numero=numero_mesa, defaults={'capacidade': 4})
             
-            # 🚨 TRAVA DE SEGURANÇA: Impede novos pedidos se a conta já foi pedida
+            # TRAVA DE SEGURANÇA: Impede novos pedidos se a conta já foi pedida
             if mesa_obj.status == 'CONTA':
                 return JsonResponse({
                     'status': 'erro', 
                     'mensagem': 'A conta já foi solicitada. Não é possível adicionar novos pedidos!'
                 }, status=403)
                 
-            # 🚨 ATUALIZAÇÃO DE FLUXO: Se a mesa estava livre, ela passa a estar ocupada ao pedir
+            # Se a mesa estava livre, ela passa a estar ocupada ao pedir
             if mesa_obj.status == 'LIVRE':
                 mesa_obj.status = 'OCUPADA'
                 mesa_obj.save()
@@ -68,7 +69,7 @@ def fazer_pedido(request):
                     {
                         'type': 'novo_pedido',
                         'pedido_id': pedido.id,
-                        'mesa': 1,
+                        'mesa': numero_mesa,
                         'itens': itens_para_cozinha
                     }
                 )
@@ -120,13 +121,13 @@ def notificar_pronto(request):
 
 # 6. ROTA DE PEDIDO DE CONTA
 @csrf_exempt
-def pedir_conta(request):
+def pedir_conta(request, numero_mesa):
     """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
     if request.method == 'POST':
         try:
-            mesa_obj = Mesa.objects.get(numero=1)
+            mesa_obj = Mesa.objects.get(numero=numero_mesa)
             
-            # 🚨 TRAVA DE SEGURANÇA: Impede pedir a conta com o saldo zerado
+            # TRAVA DE SEGURANÇA: Impede pedir a conta com o saldo zerado
             if mesa_obj.total_da_conta == 0:
                 return JsonResponse({
                     'status': 'erro', 
@@ -143,7 +144,7 @@ def pedir_conta(request):
                 'garcons',
                 {
                     'type': 'solicitacao_conta',
-                    'mesa': 1,
+                    'mesa': numero_mesa,
                     'total': float(total)
                 }
             )
@@ -162,17 +163,13 @@ def liberar_mesa(request):
             dados = json.loads(request.body)
             numero_mesa = dados.get('mesa')
             
-            mesa_obj, _ = Mesa.objects.get_or_create(
-                numero=numero_mesa, 
-                defaults={'capacidade': 4}
-            )
+            mesa_obj, _ = Mesa.objects.get_or_create(numero=numero_mesa, defaults={'capacidade': 4})
             
-            # 1. Reseta o status da mesa para Livre
+            # Reseta o status da mesa para Livre
             mesa_obj.status = 'LIVRE'
             mesa_obj.save()
             
-            # 2. Busca todos os pedidos ativos dessa mesa e muda para PAGO
-            # Isso faz com que eles saiam do cálculo da conta e fiquem arquivados!
+            # Busca todos os pedidos ativos dessa mesa e muda para PAGO
             Pedido.objects.filter(
                 mesa=mesa_obj
             ).exclude(

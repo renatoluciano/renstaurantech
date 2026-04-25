@@ -1,3 +1,4 @@
+import json # Adicionado este import que estava faltando para a função notificar_pronto
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -71,36 +72,42 @@ def fazer_pedido(request):
             
     return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)
 
-    def garcom(request):
-        return render(request, 'restaurantech/garcom.html')
+# 4. TELA DO GARÇOM
+def garcom(request):
+    """Renderiza a página do tablet do garçom."""
+    return render(request, 'restaurantech/garcom.html')
 
-    @csrf_exempt
-    def notificar_pronto(request):
-        if request.method == 'POST':
-            try:
-                dados = json.loads(request.body)
-                pedido_id = dados.get('pedido_id')
-                mesa = dados.get('mesa')
+# 5. ROTA DE NOTIFICAÇÃO DE PRATO PRONTO
+@csrf_exempt
+def notificar_pronto(request):
+    """Atualiza o pedido para PRONTO e avisa o garçom via WebSocket."""
+    if request.method == 'POST':
+        try:
+            dados = json.loads(request.body)
+            pedido_id = dados.get('pedido_id')
+            mesa = dados.get('mesa')
+        
+            # 1. Atualiza o status no banco de dados para PRONTO
+            pedido = Pedido.objects.get(id=pedido_id)
+            pedido.status = 'PRONTO'
+            pedido.save()
+        
+            # 2. Pega o controle das frequências de rádio
+            channel_layer = get_channel_layer()
+        
+            # 3. Grita para o grupo dos garçons
+            async_to_sync(channel_layer.group_send)(
+                'garcons', # Nome do grupo definido no passo 24
+                {
+                    'type': 'prato_pronto', # Função do GarcomConsumer
+                    'pedido_id': pedido_id,
+                    'mesa': mesa
+                }
+            )
+        
+            return JsonResponse({'status': 'sucesso'})
+        
+        except Exception as e:
+            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
-                # 1. Atualiza o status no banco de dados para PRONTO
-                pedido = Pedido.objects.get(id=pedido_id)
-                pedido.status = 'PRONTO'
-                pedido.save()
-            
-                # 2. Pega o controle das frequências de rádio
-                channel_layer = get_channel_layer()
-            
-                # 3. Grita para o grupo dos garçons
-                async_to_sync(channel_layer.group_send)(
-                    'garcons', # Nome do grupo definido no passo 24
-                    {
-                        'type': 'prato_pronto', # Função do GarcomConsumer
-                        'pedido_id': pedido_id,
-                        'mesa': mesa
-                    }
-                )
-            
-                return JsonResponse({'status': 'sucesso'})
-            
-            except Exception as e:
-                return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
+    return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)

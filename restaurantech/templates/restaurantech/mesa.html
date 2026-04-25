@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Tablet da Mesa</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; color: #333; text-align: center; padding: 50px; }
+        .order-btn { background: #27ae60; color: white; padding: 15px 30px; font-size: 20px; border: none; border-radius: 5px; cursor: pointer; }
+        .order-btn:hover { background: #219653; }
+        .status { margin-top: 20px; font-weight: bold; color: #27ae60; }
+    </style>
+</head>
+<body>
+    <h1>📱 Mesa 1</h1>
+    <p>Clique no botão abaixo para simular um pedido e enviar para a cozinha.</p>
+    
+    <button class="order-btn" onclick="fazerPedido()">Fazer Pedido (1x Hambúrguer + 1x Refrigerante)</button>
+    <div id="msg-status" class="status"></div>
+
+    <script>
+        function fazerPedido() {
+            const btn = document.querySelector('.order-btn');
+            btn.disabled = true;
+            btn.innerText = "Enviando...";
+
+            fetch('/fazer-pedido/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('msg-status').innerText = "Pedido enviado com sucesso para a cozinha!";
+                btn.innerText = "Fazer Outro Pedido";
+                btn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                btn.disabled = false;
+                btn.innerText = "Tentar Novamente";
+            });
+        }
+    </script>
+</body>
+</html>

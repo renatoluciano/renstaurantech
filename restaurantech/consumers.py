@@ -51,3 +51,10 @@ class GarcomConsumer(AsyncWebsocketConsumer):
             'mesa': event['mesa'],
             'pedido_id': event['pedido_id']
         }))
+
+    async def solicitacao_conta(self, event):
+        await self.send(text_data=json.dumps({
+            'tipo': 'solicitacao_conta',
+            'mesa': event['mesa'],
+            'total': event['total']
+        }))

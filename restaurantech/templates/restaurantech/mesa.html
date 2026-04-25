@@ -45,6 +45,7 @@
         <hr>
         <h3>Total: R$ <span id="total-conta">0.00</span></h3>
         <button class="enviar-btn" onclick="finalizarPedido()">Enviar para Cozinha</button>
+        <button id="conta-btn" onclick="pedirConta()" style="background: #2980b9; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px;">Pedir a Conta</button>
     </div>
 
     <script>
@@ -90,6 +91,26 @@
                 atualizarVisualCarrinho();
             });
         }
+                // NOVA FUNÇÃO AQUI:
+        function pedirConta() {
+            if (!confirm("Você realmente deseja solicitar o fechamento da conta?")) {
+                return;
+            }
+
+            fetch('/pedir-conta/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'sucesso') {
+                    alert("O garçom foi notificado e logo trará sua conta!");
+                    document.getElementById('conta-btn').disabled = true;
+                    document.getElementById('conta-btn').innerText = "Conta Solicitada";
+                }
+            });
+        }
+
     </script>
 </body>
 </html>

@@ -117,3 +117,35 @@ def notificar_pronto(request):
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
     return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)
+
+@csrf_exempt
+def pedir_conta(request):
+    """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
+    if request.method == 'POST':
+        try:
+            # 1. Encontra a mesa que está pedindo a conta
+            mesa_obj = Mesa.objects.get(numero=1)
+            mesa_obj.status = 'CONTA'
+            mesa_obj.save()
+            
+            # 2. Pega a soma da conta calculada dinamicamente (feita no Passo 18)
+            total = mesa_obj.total_da_conta
+            
+            # 3. Dispara a mensagem via WebSocket para o grupo de garçons
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                'garcons',
+                {
+                    'type': 'solicitacao_conta',
+                    'mesa': 1,
+                    'total': float(total)
+                }
+            )
+            
+            return JsonResponse({'status': 'sucesso'})
+            
+        except Exception as e:
+            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
+            
+    return JsonResponse({'status': 'erro'}, status=400)
+

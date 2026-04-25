@@ -5,6 +5,7 @@ class Mesa(models.Model):
         ('LIVRE', 'Livre'),
         ('OCUPADA', 'Ocupada'),
         ('CONTA', 'Aguardando Conta'),
+        ('PAGO', 'Pago'),
     ]
 
     numero = models.IntegerField(unique=True)
@@ -49,6 +50,7 @@ class Pedido(models.Model):
         ('PREPARANDO', 'Em Preparação'),
         ('PRONTO', 'Pronto para Entrega'),
         ('ENTREGUE', 'Entregue'),
+        ('PAGO', 'Pago'),
     ]
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='RECEBIDO')
 

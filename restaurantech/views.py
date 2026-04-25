@@ -6,14 +6,14 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Mesa, Categoria, Produto, Pedido, ItemPedido
 
-# 1. KITCHEN SCREEN
+# 1. TELA DA COZINHA
 def cozinha(request):
-    """Renders the page where the chef receives real-time orders."""
+    """Renderiza a página onde o cozinheiro recebe os pedidos em tempo real."""
     return render(request, 'restaurantech/cozinha.html')
 
-# 2. TABLE SCREEN (CLIENT)
+# 2. TELA DA MESA (CLIENTE)
 def mesa(request):
-    """Fetches active categories and products to display on the menu."""
+    """Busca as categorias e produtos ativos para exibir no cardápio."""
     categorias = Categoria.objects.all()
     produtos = Produto.objects.filter(disponivel=True)
     
@@ -23,10 +23,10 @@ def mesa(request):
     }
     return render(request, 'restaurantech/mesa.html', contexto)
 
-# 3. ORDER PROCESSING ROUTE
+# 3. ROTA DE PROCESSAMENTO DO PEDIDO
 @csrf_exempt
 def fazer_pedido(request):
-    """Processes the dynamic list from the cart, saves to DB, and alerts the kitchen."""
+    """Processa a lista dinâmica do carrinho, salva no banco e avisa a cozinha."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
@@ -35,17 +35,23 @@ def fazer_pedido(request):
             if not itens_carrinho:
                 return JsonResponse({'status': 'erro', 'mensagem': 'Carrinho vazio'}, status=400)
 
-            # Finds or creates table 1 for testing
+            # Encontra ou cria a mesa 1 para os testes
             mesa_obj, _ = Mesa.objects.get_or_create(numero=1, defaults={'capacidade': 4})
             
-            # SECURITY LOCK: Prevents new orders if the bill has already been requested
+            # 🚨 TRAVA DE SEGURANÇA: Impede novos pedidos se a conta já foi pedida
             if mesa_obj.status == 'CONTA':
                 return JsonResponse({
                     'status': 'erro', 
                     'mensagem': 'A conta já foi solicitada. Não é possível adicionar novos pedidos!'
                 }, status=403)
+                
+            # 🚨 ATUALIZAÇÃO DE FLUXO: Se a mesa estava livre, ela passa a estar ocupada ao pedir
+            if mesa_obj.status == 'LIVRE':
+                mesa_obj.status = 'OCUPADA'
+                mesa_obj.save()
 
-            pedido = Pedido.objects.create(mesa=mesa_obj)
+            # Força o pedido a nascer como 'RECEBIDO' para entrar no cálculo da conta
+            pedido = Pedido.objects.create(mesa=mesa_obj, status='RECEBIDO')
             
             itens_para_cozinha = []
             for item in itens_carrinho:
@@ -54,7 +60,7 @@ def fazer_pedido(request):
                 ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=1)
                 itens_para_cozinha.append(f"1x {produto.nome}")
 
-            # Triggers WebSocket to the kitchen
+            # Dispara WebSocket para a cozinha
             try:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
@@ -67,7 +73,7 @@ def fazer_pedido(request):
                     }
                 )
             except Exception as e:
-                print(f"WebSocket Error: {e}")
+                print(f"Erro WebSocket: {e}")
 
             return JsonResponse({'status': 'sucesso', 'pedido_id': pedido.id})
             
@@ -76,19 +82,19 @@ def fazer_pedido(request):
             
     return JsonResponse({'status': 'erro'}, status=400)
 
-# 4. WAITER SCREEN
+# 4. TELA DO GARÇOM
 def garcom(request):
-    """Renders the waiter tablet page loading tables requesting the bill."""
+    """Busca as mesas que estão pedindo a conta para exibir ao carregar."""
     mesas_aguardando = Mesa.objects.filter(status='CONTA')
     contexto = {
         'mesas_aguardando': mesas_aguardando
     }
     return render(request, 'restaurantech/garcom.html', contexto)
 
-# 5. READY PLATE NOTIFICATION ROUTE
+# 5. ROTA DE NOTIFICAÇÃO DE PRATO PRONTO
 @csrf_exempt
 def notificar_pronto(request):
-    """Updates the order to READY and alerts the waiter via WebSocket."""
+    """Atualiza o pedido para PRONTO e avisa o garçom via WebSocket."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
@@ -112,7 +118,7 @@ def notificar_pronto(request):
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
 
-# 6. BILL REQUEST ROUTE
+# 6. ROTA DE PEDIDO DE CONTA
 @csrf_exempt
 def pedir_conta(request):
     """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
@@ -120,8 +126,7 @@ def pedir_conta(request):
         try:
             mesa_obj = Mesa.objects.get(numero=1)
             
-            # 🚨 NOVA TRAVA DE SEGURANÇA AQUI:
-            # Verifica se o método property do Passo 18 resultou em zero
+            # 🚨 TRAVA DE SEGURANÇA: Impede pedir a conta com o saldo zerado
             if mesa_obj.total_da_conta == 0:
                 return JsonResponse({
                     'status': 'erro', 
@@ -147,21 +152,32 @@ def pedir_conta(request):
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
     return JsonResponse({'status': 'erro'}, status=400)
-# 7. TABLE RELEASE ROUTE
+
+# 7. ROTA DE LIBERAÇÃO DE MESA
 @csrf_exempt
 def liberar_mesa(request):
-    """Changes table status to FREE and completes active orders."""
+    """Muda o status da mesa para LIVRE e fecha a conta zerando os valores."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
             numero_mesa = dados.get('mesa')
             
-            mesa_obj, _ = Mesa.objects.get_or_create(numero=numero_mesa, defaults={'capacidade': 4})
+            mesa_obj, _ = Mesa.objects.get_or_create(
+                numero=numero_mesa, 
+                defaults={'capacidade': 4}
+            )
+            
+            # 1. Reseta o status da mesa para Livre
             mesa_obj.status = 'LIVRE'
             mesa_obj.save()
             
-            # Clears the bill by completing active orders
-            Pedido.objects.filter(mesa=mesa_obj).exclude(status='ENTREGUE').update(status='ENTREGUE')
+            # 2. Busca todos os pedidos ativos dessa mesa e muda para PAGO
+            # Isso faz com que eles saiam do cálculo da conta e fiquem arquivados!
+            Pedido.objects.filter(
+                mesa=mesa_obj
+            ).exclude(
+                status='PAGO'
+            ).update(status='PAGO')
             
             return JsonResponse({'status': 'sucesso'})
         except Exception as e:
@@ -169,10 +185,10 @@ def liberar_mesa(request):
             
     return JsonResponse({'status': 'erro'}, status=400)
 
-# 8. MARK AS DELIVERED ROUTE
+# 8. ROTA DE MARCAR COMO ENTREGUE
 @csrf_exempt
 def marcar_entregue(request):
-    """Allows the waiter to mark the order as delivered."""
+    """Permite ao garçom marcar o prato como entregue na mesa."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)

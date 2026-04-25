@@ -35,3 +35,26 @@ class Produto(models.Model):
     def __str__(self):
         return f"{self.nome} - R$ {self.preco}"
 
+class Pedido(models.Model):
+    mesa = models.ForeignKey(Mesa, on_delete=models.CASCADE)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    
+    STATUS_CHOICES = [
+        ('RECEBIDO', 'Recebido'),
+        ('PREPARANDO', 'Em Preparação'),
+        ('PRONTO', 'Pronto para Entrega'),
+        ('ENTREGUE', 'Entregue'),
+    ]
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='RECEBIDO')
+
+    def __str__(self):
+        return f"Pedido {self.id} - Mesa {self.mesa.numero}"
+
+class ItemPedido(models.Model):
+    pedido = models.ForeignKey(Pedido, related_name='itens', on_delete=models.CASCADE)
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE)
+    quantidade = models.PositiveIntegerField(default=1)
+    observacao = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.quantidade}x {self.produto.nome} (Mesa {self.pedido.mesa.numero})"

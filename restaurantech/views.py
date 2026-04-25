@@ -29,33 +29,24 @@ def fazer_pedido(request):
     """Processa a lista dinâmica do carrinho, salva no banco e avisa a cozinha."""
     if request.method == 'POST':
         try:
-            # ETAPA A: Lê os dados enviados em formato JSON pelo JavaScript
             dados = json.loads(request.body)
             itens_carrinho = dados.get('itens', [])
             
             if not itens_carrinho:
                 return JsonResponse({'status': 'erro', 'mensagem': 'Carrinho vazio'}, status=400)
 
-            # ETAPA B: Encontra ou cria a Mesa 1 para testes
             mesa_obj, _ = Mesa.objects.get_or_create(numero=1, defaults={'capacidade': 4})
-            
-            # ETAPA C: Cria a casca do pedido no banco de dados
             pedido = Pedido.objects.create(mesa=mesa_obj)
             
             itens_para_cozinha = []
-            
-            # ETAPA D: Varre os itens que o cliente escolheu no carrinho e salva
             for item in itens_carrinho:
                 produto_id = item.get('id')
                 produto = Produto.objects.get(id=produto_id)
                 
-                # Registra o item do pedido no banco de dados
                 ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=1)
-                
-                # Guarda o texto formatado para mandar para a cozinha
                 itens_para_cozinha.append(f"1x {produto.nome}")
 
-            # ETAPA E: Dispara a mensagem via WebSocket com a lista completa para a cozinha
+            # Dispara WebSocket para a cozinha
             try:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
@@ -67,16 +58,15 @@ def fazer_pedido(request):
                         'itens': itens_para_cozinha
                     }
                 )
-            except Exception as websocket_error:
-                print(f"Aviso: Pedido salvo, mas falhou ao enviar via WebSocket: {websocket_error}")
+            except Exception as e:
+                print(f"Erro WebSocket: {e}")
 
             return JsonResponse({'status': 'sucesso', 'pedido_id': pedido.id})
             
         except Exception as e:
-            print(f"Erro Crítico no Servidor: {e}")
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
-    return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)
+    return JsonResponse({'status': 'erro'}, status=400)
 
 # 4. TELA DO GARÇOM
 def garcom(request):
@@ -93,12 +83,10 @@ def notificar_pronto(request):
             pedido_id = dados.get('pedido_id')
             mesa = dados.get('mesa')
         
-            # Atualiza o status no banco de dados para PRONTO
             pedido = Pedido.objects.get(id=pedido_id)
             pedido.status = 'PRONTO'
             pedido.save()
         
-            # Grita para o grupo dos garçons
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 'garcons',
@@ -108,13 +96,9 @@ def notificar_pronto(request):
                     'mesa': mesa
                 }
             )
-        
             return JsonResponse({'status': 'sucesso'})
-            
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
-            
-    return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)
 
 # 6. ROTA DE PEDIDO DE CONTA
 @csrf_exempt
@@ -137,10 +121,23 @@ def pedir_conta(request):
                     'total': float(total)
                 }
             )
-            
             return JsonResponse({'status': 'sucesso'})
-            
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
+
+# 7. ROTA DE LIBERAÇÃO DE MESA
+@csrf_exempt
+def liberar_mesa(request):
+    """Muda o status da mesa para LIVRE após pagamento."""
+    if request.method == 'POST':
+        try:
+            dados = json.loads(request.body)
+            numero_mesa = dados.get('mesa')
             
-    return JsonResponse({'status': 'erro'}, status=400)
+            mesa_obj = Mesa.objects.get(numero=numero_mesa)
+            mesa_obj.status = 'LIVRE'
+            mesa_obj.save()
+            
+            return JsonResponse({'status': 'sucesso'})
+        except Exception as e:
+            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)

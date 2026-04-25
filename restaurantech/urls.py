@@ -7,4 +7,6 @@ urlpatterns = [
     path('fazer-pedido/', views.fazer_pedido, name='fazer_pedido'),
     path('garcom/', views.garcom, name='garcom'),
     path('notificar-pronto/', views.notificar_pronto, name='notificar_pronto'),
+    path('pedir-conta/', views.pedir_conta, name='pedir_conta'),
+    path('liberar-mesa/', views.liberar_mesa, name='liberar_mesa'),
 ]

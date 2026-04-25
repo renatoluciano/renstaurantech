@@ -5,7 +5,6 @@ class RestaurantechConfig(AppConfig):
     name = 'restaurantech'
 
     def ready(self):
-        # Desativamos a linha abaixo colocando o caractere '#' na frente.
-        # Isso impede que o Django carregue o arquivo de signals redundante.
+        # Desativado para evitar duplicidade de pedidos na cozinha
         # import restaurantech.signals 
         pass

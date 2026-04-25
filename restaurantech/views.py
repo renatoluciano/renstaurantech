@@ -26,54 +26,53 @@ def mesa(request):
 # 3. ROTA DE PROCESSAMENTO DO PEDIDO
 @csrf_exempt
 def fazer_pedido(request):
-    """Processa o clique do botão no tablet, salva no banco e avisa a cozinha."""
+    """Processa a lista dinâmica de produtos enviados pelo carrinho do cliente."""
     if request.method == 'POST':
         try:
-            # ETAPA A: Cria a mesa e a categoria caso não existam no banco
-            mesa_obj, _ = Mesa.objects.get_or_create(
-                numero=1, 
-                defaults={'capacidade': 4}
-            )
-            categoria_obj, _ = Categoria.objects.get_or_create(
-                nome="Geral"
-            )
+            # 1. Lê os dados enviados em formato JSON pelo JavaScript
+            dados = json.loads(request.body)
+            itens_carrinho = dados.get('itens', [])
             
-            # ETAPA B: Cria os produtos fictícios caso não existam no banco
-            hamburguer, _ = Produto.objects.get_or_create(
-                nome="Hamburguer", 
-                defaults={'preco': 35.00, 'categoria': categoria_obj}
-            )
-            refri, _ = Produto.objects.get_or_create(
-                nome="Refrigerante", 
-                defaults={'preco': 7.00, 'categoria': categoria_obj}
-            )
+            if not itens_carrinho:
+                return JsonResponse({'status': 'erro', 'mensagem': 'Carrinho vazio'}, status=400)
+
+            # 2. Encontra ou cria a Mesa 1 para testes
+            mesa_obj, _ = Mesa.objects.get_or_create(numero=1, defaults={'capacidade': 4})
             
-            # ETAPA C: Cria o pedido e vincula os itens no banco de dados
+            # 3. Cria a casca do pedido no banco
             pedido = Pedido.objects.create(mesa=mesa_obj)
-            ItemPedido.objects.create(pedido=pedido, produto=hamburguer, quantidade=1)
-            ItemPedido.objects.create(pedido=pedido, produto=refri, quantidade=1)
             
-            # ETAPA D: Tenta disparar a mensagem via WebSocket para a cozinha
+            itens_para_cozinha = []
+            
+            # 4. Varre os itens que o cliente escolheu e salva no banco
+            for item in itens_carrinho:
+                produto_id = item.get('id')
+                produto = Produto.objects.get(id=produto_id)
+                
+                # Registra o item no banco de dados
+                ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=1)
+                
+                # Guarda o texto para mandar para a cozinha
+                itens_para_cozinha.append(f"1x {produto.nome}")
+
+            # 5. Tenta disparar a mensagem via WebSocket para a cozinha
             try:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
-                    'cozinha', # Nome do grupo definido no arquivo consumers.py
+                    'cozinha',
                     {
-                        'type': 'novo_pedido', # Nome da função dentro do CozinhaConsumer
+                        'type': 'novo_pedido',
                         'pedido_id': pedido.id,
                         'mesa': 1,
-                        'itens': ['1x Hamburguer', '1x Refrigerante']
+                        'itens': itens_para_cozinha
                     }
                 )
             except Exception as websocket_error:
-                # Se o WebSocket falhar (falta de Redis, etc), o código não quebra!
-                print(f"Aviso: Pedido salvo no banco, mas falhou ao enviar via WebSocket: {websocket_error}")
+                print(f"Aviso: Pedido salvo, mas falhou ao enviar via WebSocket: {websocket_error}")
 
-            # Retorna sucesso absoluto para o navegador do tablet
             return JsonResponse({'status': 'sucesso', 'pedido_id': pedido.id})
             
         except Exception as e:
-            # Se der qualquer erro crítico no Python ao salvar no banco, avisa no terminal
             print(f"Erro Crítico no Servidor: {e}")
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             

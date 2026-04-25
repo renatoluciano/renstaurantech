@@ -14,7 +14,7 @@ class Mesa(models.Model):
     @property
     def total_da_conta(self):
         # Soma apenas o que ainda NÃO foi entregue ao cliente
-        pedidos = self.pedido_set.filter(status__in=['RECEBIDO', 'PREPARANDO', 'PRONTO'])
+        pedidos = self.pedido_set.filter(status__in=['RECEBIDO', 'PREPARANDO', 'PRONTO', 'ENTREGUE'])
         total = 0
         for pedido in pedidos:
             for item in pedido.itens.all():

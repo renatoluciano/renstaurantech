@@ -17,7 +17,7 @@
         <!-- Os pedidos vão aparecer aqui magicamente -->
     </div>
 
-    <script>
+        <script>
         const socket = new WebSocket('ws://' + window.location.host + '/ws/cozinha/');
 
         socket.onmessage = function(e) {
@@ -28,6 +28,7 @@
                 
                 const card = document.createElement('div');
                 card.className = 'card';
+                card.id = `pedido-${data.pedido_id}`; // Adiciona um ID único para podermos remover depois
                 
                 let itensHtml = '';
                 data.itens.forEach(item => {
@@ -38,11 +39,32 @@
                     <h3>Mesa ${data.mesa}</h3>
                     <p>Pedido #${data.pedido_id}</p>
                     <ul>${itensHtml}</ul>
+                    <!-- NOVO BOTÃO AQUI: -->
+                    <button onclick="notificarPronto(${data.pedido_id}, ${data.mesa})" style="background:#27ae60; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; width:100%;">Marcar como Pronto</button>
                 `;
                 
                 painel.appendChild(card);
             }
         };
+
+        // NOVA FUNÇÃO AQUI:
+        function notificarPronto(pedidoId, mesaNumero) {
+            // Envia uma requisição para o Django avisando que está pronto
+            fetch('/notificar-pronto/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pedido_id: pedidoId, mesa: mesaNumero })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'sucesso') {
+                    // Remove o card da tela da cozinha pois já foi feito
+                    const card = document.getElementById(`pedido-${pedidoId}`);
+                    card.remove();
+                }
+            });
+        }
     </script>
+
 </body>
 </html>

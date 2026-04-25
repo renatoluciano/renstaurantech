@@ -73,3 +73,34 @@ def fazer_pedido(request):
 
     def garcom(request):
         return render(request, 'restaurantech/garcom.html')
+
+    @csrf_exempt
+    def notificar_pronto(request):
+        if request.method == 'POST':
+            try:
+                dados = json.loads(request.body)
+                pedido_id = dados.get('pedido_id')
+                mesa = dados.get('mesa')
+            
+                # 1. Atualiza o status no banco de dados para PRONTO
+                pedido = Pedido.objects.get(id=pedido_id)
+                pedido.status = 'PRONTO'
+                pedido.save()
+            
+                # 2. Pega o controle das frequências de rádio
+                channel_layer = get_channel_layer()
+            
+                # 3. Grita para o grupo dos garçons
+                async_to_sync(channel_layer.group_send)(
+                    'garcons', # Nome do grupo definido no passo 24
+                    {
+                        'type': 'prato_pronto', # Função do GarcomConsumer
+                        'pedido_id': pedido_id,
+                        'mesa': mesa
+                    }
+                )
+            
+                return JsonResponse({'status': 'sucesso'})
+            
+            except Exception as e:
+                return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)

@@ -6,14 +6,14 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Mesa, Categoria, Produto, Pedido, ItemPedido
 
-# 1. TELA DA COZINHA
+# 1. KITCHEN SCREEN
 def cozinha(request):
-    """Renderiza a página onde o cozinheiro recebe os pedidos em tempo real."""
+    """Renders the page where the chef receives real-time orders."""
     return render(request, 'restaurantech/cozinha.html')
 
-# 2. TELA DA MESA (CLIENTE)
+# 2. TABLE SCREEN (CLIENT)
 def mesa(request):
-    """Busca as categorias e produtos ativos para exibir no cardápio."""
+    """Fetches active categories and products to display on the menu."""
     categorias = Categoria.objects.all()
     produtos = Produto.objects.filter(disponivel=True)
     
@@ -23,10 +23,10 @@ def mesa(request):
     }
     return render(request, 'restaurantech/mesa.html', contexto)
 
-# 3. ROTA DE PROCESSAMENTO DO PEDIDO
+# 3. ORDER PROCESSING ROUTE
 @csrf_exempt
 def fazer_pedido(request):
-    """Processa a lista dinâmica do carrinho, salva no banco e avisa a cozinha."""
+    """Processes the dynamic list from the cart, saves to DB, and alerts the kitchen."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
@@ -35,10 +35,10 @@ def fazer_pedido(request):
             if not itens_carrinho:
                 return JsonResponse({'status': 'erro', 'mensagem': 'Carrinho vazio'}, status=400)
 
-            # Encontra ou cria a mesa para o teste
+            # Finds or creates table 1 for testing
             mesa_obj, _ = Mesa.objects.get_or_create(numero=1, defaults={'capacidade': 4})
             
-            # 🚨 TRAVA DE SEGURANÇA: Impede novos pedidos se a conta já foi pedida
+            # SECURITY LOCK: Prevents new orders if the bill has already been requested
             if mesa_obj.status == 'CONTA':
                 return JsonResponse({
                     'status': 'erro', 
@@ -54,7 +54,7 @@ def fazer_pedido(request):
                 ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=1)
                 itens_para_cozinha.append(f"1x {produto.nome}")
 
-            # Dispara WebSocket para a cozinha
+            # Triggers WebSocket to the kitchen
             try:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
@@ -67,7 +67,7 @@ def fazer_pedido(request):
                     }
                 )
             except Exception as e:
-                print(f"Erro WebSocket: {e}")
+                print(f"WebSocket Error: {e}")
 
             return JsonResponse({'status': 'sucesso', 'pedido_id': pedido.id})
             
@@ -76,21 +76,19 @@ def fazer_pedido(request):
             
     return JsonResponse({'status': 'erro'}, status=400)
 
-# 4. TELA DO GARÇOM
+# 4. WAITER SCREEN
 def garcom(request):
-    """Busca as mesas que estão pedindo a conta para exibir ao carregar."""
-    # Busca todas as mesas com status 'CONTA'
+    """Renders the waiter tablet page loading tables requesting the bill."""
     mesas_aguardando = Mesa.objects.filter(status='CONTA')
-    
     contexto = {
         'mesas_aguardando': mesas_aguardando
     }
     return render(request, 'restaurantech/garcom.html', contexto)
 
-# 5. ROTA DE NOTIFICAÇÃO DE PRATO PRONTO
+# 5. READY PLATE NOTIFICATION ROUTE
 @csrf_exempt
 def notificar_pronto(request):
-    """Atualiza o pedido para PRONTO e avisa o garçom via WebSocket."""
+    """Updates the order to READY and alerts the waiter via WebSocket."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
@@ -114,10 +112,10 @@ def notificar_pronto(request):
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
 
-# 6. ROTA DE PEDIDO DE CONTA
+# 6. BILL REQUEST ROUTE
 @csrf_exempt
 def pedir_conta(request):
-    """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
+    """Changes table status to BILL and alerts the waiter in real time."""
     if request.method == 'POST':
         try:
             mesa_obj = Mesa.objects.get(numero=1)
@@ -139,35 +137,43 @@ def pedir_conta(request):
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
 
-# 7. ROTA DE LIBERAÇÃO DE MESA (Essa que estava faltando!)
+# 7. TABLE RELEASE ROUTE
 @csrf_exempt
 def liberar_mesa(request):
-    """Muda o status da mesa para LIVRE e limpa o valor da conta."""
+    """Changes table status to FREE and completes active orders."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
             numero_mesa = dados.get('mesa')
             
-            # Encontra ou cria a mesa para garantir que ela exista
-            mesa_obj, _ = Mesa.objects.get_or_create(
-                numero=numero_mesa, 
-                defaults={'capacidade': 4}
-            )
-            
-            # Reseta o status da mesa
+            mesa_obj, _ = Mesa.objects.get_or_create(numero=numero_mesa, defaults={'capacidade': 4})
             mesa_obj.status = 'LIVRE'
             mesa_obj.save()
             
-            # Força todos os pedidos ativos a mudarem para ENTREGUE para zerar a conta
-            Pedido.objects.filter(
-                mesa=mesa_obj
-            ).exclude(
-                status='ENTREGUE'
-            ).update(status='ENTREGUE')
+            # Clears the bill by completing active orders
+            Pedido.objects.filter(mesa=mesa_obj).exclude(status='ENTREGUE').update(status='ENTREGUE')
             
             return JsonResponse({'status': 'sucesso'})
         except Exception as e:
-            print(f"Erro ao liberar mesa: {e}")
+            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
+            
+    return JsonResponse({'status': 'erro'}, status=400)
+
+# 8. MARK AS DELIVERED ROUTE
+@csrf_exempt
+def marcar_entregue(request):
+    """Allows the waiter to mark the order as delivered."""
+    if request.method == 'POST':
+        try:
+            dados = json.loads(request.body)
+            pedido_id = dados.get('pedido_id')
+            
+            pedido = Pedido.objects.get(id=pedido_id)
+            pedido.status = 'ENTREGUE'
+            pedido.save()
+            
+            return JsonResponse({'status': 'sucesso'})
+        except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
     return JsonResponse({'status': 'erro'}, status=400)

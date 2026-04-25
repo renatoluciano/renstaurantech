@@ -21,7 +21,7 @@
     
     <div class="grid" id="painel-alertas">
         
-        <!-- 🚨 NOVO BLOCO: Carrega as mesas que já pediram conta antes -->
+        <!-- Preloads tables waiting for the bill -->
         {% for mesa in mesas_aguardando %}
             <div class="card alerta-conta" id="mesa-conta-{{ mesa.numero }}">
                 <h3>💰 Pedido de Conta!</h3>
@@ -43,9 +43,11 @@
             if (data.tipo === 'prato_pronto') {
                 const card = document.createElement('div');
                 card.className = 'card alerta-prato';
+                card.id = `pedido-pronto-${data.pedido_id}`;
                 card.innerHTML = `
                     <h3>🔔 Levar para Mesa ${data.mesa}</h3>
                     <p>Pedido #${data.pedido_id} finalizado!</p>
+                    <button onclick="marcarEntregue(${data.pedido_id})" style="background:#27ae60; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; width:100%; margin-top:10px;">Marcar como Entregue</button>
                 `;
                 painel.appendChild(card);
                 tocarSom();
@@ -65,6 +67,22 @@
                 tocarSom();
             }
         };
+
+        function marcarEntregue(pedidoId) {
+            fetch('/marcar-entregue/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pedido_id: pedidoId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'sucesso') {
+                    const card = document.getElementById(`pedido-pronto-${pedidoId}`);
+                    if (card) card.remove();
+                    alert(`Pedido #${pedidoId} marcado como entregue!`);
+                }
+            });
+        }
 
         function liberarMesa(numeroMesa) {
             if (!confirm(`Confirmar pagamento e liberar a Mesa ${numeroMesa}?`)) {
@@ -87,7 +105,7 @@
         }
 
         function tocarSom() {
-            const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+            const audio = new Audio('https://google.com');
             audio.play();
         }
     </script>

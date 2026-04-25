@@ -70,3 +70,6 @@ def fazer_pedido(request):
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
     return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)
+
+    def garcom(request):
+        return render(request, 'restaurantech/garcom.html')

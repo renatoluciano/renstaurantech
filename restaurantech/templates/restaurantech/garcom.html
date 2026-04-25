@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Tablet do Garçom</title>
+    <style>
+        body { font-family: sans-serif; background: #e0f2f1; color: #333; }
+        .grid { display: flex; flex-wrap: wrap; gap: 20px; padding: 20px; }
+        .card { background: #fff; padding: 15px; border-radius: 8px; width: 250px; border-left: 5px solid #009688; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .card h3 { margin-top: 0; color: #00796b; }
+    </style>
+</head>
+<body>
+    <h1>🤵 Painel do Garçom</h1>
+    <p>Aguardando notificações da cozinha...</p>
+    
+    <div class="grid" id="painel-alertas">
+        <!-- Notificações vão aparecer aqui -->
+    </div>
+
+    <script>
+        // 1. Abre a conexão WebSocket no endereço do garçom
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/garcom/');
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            // 2. Escuta apenas as mensagens de prato pronto
+            if (data.tipo === 'prato_pronto') {
+                const painel = document.getElementById('painel-alertas');
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>🔔 Levar para Mesa ${data.mesa}</h3>
+                    <p>Pedido #${data.pedido_id} finalizado!</p>
+                `;
+                
+                painel.appendChild(card);
+                
+                // Emite um som para chamar atenção do garçom
+                const audio = new Audio('https://google.com');
+                audio.play();
+            }
+        };
+    </script>
+</body>
+</html>

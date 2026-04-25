@@ -1,7 +1,6 @@
 from django.contrib import admin
 from .models import Mesa, Categoria, Produto, Pedido, ItemPedido
 
-# Configuração para exibir os itens dentro da página do pedido no painel
 class ItemPedidoInline(admin.TabularInline):
     model = ItemPedido
     extra = 1

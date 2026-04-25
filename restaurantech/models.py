@@ -1,7 +1,5 @@
 from django.db import models
 
-from django.db import models
-
 class Mesa(models.Model):
     STATUS_CHOICES = [
         ('LIVRE', 'Livre'),
@@ -11,29 +9,21 @@ class Mesa(models.Model):
 
     numero = models.IntegerField(unique=True)
     capacidade = models.IntegerField()
-    status = models.CharField(
-        max_length=10, 
-        choices=STATUS_CHOICES, 
-        default='LIVRE'
-    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='LIVRE')
 
-    # NOVO MÉTODO AQUI:
     @property
     def total_da_conta(self):
-        # Busca todos os pedidos dessa mesa que não foram finalizados (status 'RECEBIDO', 'PREPARANDO' ou 'PRONTO')
+        # Soma apenas o que ainda NÃO foi entregue ao cliente
         pedidos = self.pedido_set.filter(status__in=['RECEBIDO', 'PREPARANDO', 'PRONTO'])
-        
         total = 0
         for pedido in pedidos:
             for item in pedido.itens.all():
                 total += item.produto.preco * item.quantidade
-                
         return total
 
     def __str__(self):
         return f"Mesa {self.numero} - Total Atual: R$ {self.total_da_conta}"
 
-    
 class Categoria(models.Model):
     nome = models.CharField(max_length=50, unique=True)
 
@@ -45,7 +35,7 @@ class Produto(models.Model):
     descricao = models.TextField(blank=True)
     preco = models.DecimalField(max_digits=10, decimal_places=2)
     categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE)
-    disponivel = models.BooleanField(default=True) # Para pausar vendas se acabar o estoque
+    disponivel = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.nome} - R$ {self.preco}"

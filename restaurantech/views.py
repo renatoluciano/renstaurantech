@@ -6,27 +6,17 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Mesa, Categoria, Produto, Pedido, ItemPedido
 
-# 1. TELA DA COZINHA
 def cozinha(request):
-    """Renderiza a página onde o cozinheiro recebe os pedidos em tempo real."""
     return render(request, 'restaurantech/cozinha.html')
 
-# 2. TELA DA MESA (CLIENTE)
 def mesa(request):
-    """Busca as categorias e produtos ativos para exibir no cardápio."""
     categorias = Categoria.objects.all()
     produtos = Produto.objects.filter(disponivel=True)
-    
-    contexto = {
-        'categorias': categorias,
-        'produtos': produtos,
-    }
+    contexto = {'categorias': categorias, 'produtos': produtos}
     return render(request, 'restaurantech/mesa.html', contexto)
 
-# 3. ROTA DE PROCESSAMENTO DO PEDIDO
 @csrf_exempt
 def fazer_pedido(request):
-    """Processa a lista dinâmica do carrinho, salva no banco e avisa a cozinha."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
@@ -42,21 +32,14 @@ def fazer_pedido(request):
             for item in itens_carrinho:
                 produto_id = item.get('id')
                 produto = Produto.objects.get(id=produto_id)
-                
                 ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=1)
                 itens_para_cozinha.append(f"1x {produto.nome}")
 
-            # Dispara WebSocket para a cozinha
             try:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
                     'cozinha',
-                    {
-                        'type': 'novo_pedido',
-                        'pedido_id': pedido.id,
-                        'mesa': 1,
-                        'itens': itens_para_cozinha
-                    }
+                    {'type': 'novo_pedido', 'pedido_id': pedido.id, 'mesa': 1, 'itens': itens_para_cozinha}
                 )
             except Exception as e:
                 print(f"Erro WebSocket: {e}")
@@ -68,15 +51,11 @@ def fazer_pedido(request):
             
     return JsonResponse({'status': 'erro'}, status=400)
 
-# 4. TELA DO GARÇOM
 def garcom(request):
-    """Renderiza a página do tablet do garçom."""
     return render(request, 'restaurantech/garcom.html')
 
-# 5. ROTA DE NOTIFICAÇÃO DE PRATO PRONTO
 @csrf_exempt
 def notificar_pronto(request):
-    """Atualiza o pedido para PRONTO e avisa o garçom via WebSocket."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
@@ -90,20 +69,14 @@ def notificar_pronto(request):
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 'garcons',
-                {
-                    'type': 'prato_pronto',
-                    'pedido_id': pedido_id,
-                    'mesa': mesa
-                }
+                {'type': 'prato_pronto', 'pedido_id': pedido_id, 'mesa': mesa}
             )
             return JsonResponse({'status': 'sucesso'})
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
 
-# 6. ROTA DE PEDIDO DE CONTA
 @csrf_exempt
 def pedir_conta(request):
-    """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
     if request.method == 'POST':
         try:
             mesa_obj = Mesa.objects.get(numero=1)
@@ -115,29 +88,31 @@ def pedir_conta(request):
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 'garcons',
-                {
-                    'type': 'solicitacao_conta',
-                    'mesa': 1,
-                    'total': float(total)
-                }
+                {'type': 'solicitacao_conta', 'mesa': 1, 'total': float(total)}
             )
             return JsonResponse({'status': 'sucesso'})
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
 
-# 7. ROTA DE LIBERAÇÃO DE MESA
 @csrf_exempt
 def liberar_mesa(request):
-    """Muda o status da mesa para LIVRE após pagamento."""
     if request.method == 'POST':
         try:
             dados = json.loads(request.body)
             numero_mesa = dados.get('mesa')
             
+            # 1. Busca a mesa e reseta o status para LIVRE
             mesa_obj = Mesa.objects.get(numero=numero_mesa)
             mesa_obj.status = 'LIVRE'
             mesa_obj.save()
             
+            # 2. NOVA LÓGICA AGRESSIVA: 
+            # Em vez de tentar adivinhar o status, pegamos TODOS os pedidos dessa mesa
+            # que NÃO estão entregues e forçamos o status para 'ENTREGUE'.
+            Pedido.objects.filter(mesa=mesa_obj).exclude(status='ENTREGUE').update(status='ENTREGUE')
+            
             return JsonResponse({'status': 'sucesso'})
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
+            
+    return JsonResponse({'status': 'erro'}, status=400)

@@ -1,4 +1,4 @@
-import json # Adicionado este import que estava faltando para a função notificar_pronto
+import json
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -26,36 +26,36 @@ def mesa(request):
 # 3. ROTA DE PROCESSAMENTO DO PEDIDO
 @csrf_exempt
 def fazer_pedido(request):
-    """Processa a lista dinâmica de produtos enviados pelo carrinho do cliente."""
+    """Processa a lista dinâmica do carrinho, salva no banco e avisa a cozinha."""
     if request.method == 'POST':
         try:
-            # 1. Lê os dados enviados em formato JSON pelo JavaScript
+            # ETAPA A: Lê os dados enviados em formato JSON pelo JavaScript
             dados = json.loads(request.body)
             itens_carrinho = dados.get('itens', [])
             
             if not itens_carrinho:
                 return JsonResponse({'status': 'erro', 'mensagem': 'Carrinho vazio'}, status=400)
 
-            # 2. Encontra ou cria a Mesa 1 para testes
+            # ETAPA B: Encontra ou cria a Mesa 1 para testes
             mesa_obj, _ = Mesa.objects.get_or_create(numero=1, defaults={'capacidade': 4})
             
-            # 3. Cria a casca do pedido no banco
+            # ETAPA C: Cria a casca do pedido no banco de dados
             pedido = Pedido.objects.create(mesa=mesa_obj)
             
             itens_para_cozinha = []
             
-            # 4. Varre os itens que o cliente escolheu e salva no banco
+            # ETAPA D: Varre os itens que o cliente escolheu no carrinho e salva
             for item in itens_carrinho:
                 produto_id = item.get('id')
                 produto = Produto.objects.get(id=produto_id)
                 
-                # Registra o item no banco de dados
+                # Registra o item do pedido no banco de dados
                 ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=1)
                 
-                # Guarda o texto para mandar para a cozinha
+                # Guarda o texto formatado para mandar para a cozinha
                 itens_para_cozinha.append(f"1x {produto.nome}")
 
-            # 5. Tenta disparar a mensagem via WebSocket para a cozinha
+            # ETAPA E: Dispara a mensagem via WebSocket com a lista completa para a cozinha
             try:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
@@ -93,45 +93,41 @@ def notificar_pronto(request):
             pedido_id = dados.get('pedido_id')
             mesa = dados.get('mesa')
         
-            # 1. Atualiza o status no banco de dados para PRONTO
+            # Atualiza o status no banco de dados para PRONTO
             pedido = Pedido.objects.get(id=pedido_id)
             pedido.status = 'PRONTO'
             pedido.save()
         
-            # 2. Pega o controle das frequências de rádio
+            # Grita para o grupo dos garçons
             channel_layer = get_channel_layer()
-        
-            # 3. Grita para o grupo dos garçons
             async_to_sync(channel_layer.group_send)(
-                'garcons', # Nome do grupo definido no passo 24
+                'garcons',
                 {
-                    'type': 'prato_pronto', # Função do GarcomConsumer
+                    'type': 'prato_pronto',
                     'pedido_id': pedido_id,
                     'mesa': mesa
                 }
             )
         
             return JsonResponse({'status': 'sucesso'})
-        
+            
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
     return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido'}, status=400)
 
+# 6. ROTA DE PEDIDO DE CONTA
 @csrf_exempt
 def pedir_conta(request):
     """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
     if request.method == 'POST':
         try:
-            # 1. Encontra a mesa que está pedindo a conta
             mesa_obj = Mesa.objects.get(numero=1)
             mesa_obj.status = 'CONTA'
             mesa_obj.save()
             
-            # 2. Pega a soma da conta calculada dinamicamente (feita no Passo 18)
             total = mesa_obj.total_da_conta
             
-            # 3. Dispara a mensagem via WebSocket para o grupo de garçons
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 'garcons',
@@ -148,4 +144,3 @@ def pedir_conta(request):
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
             
     return JsonResponse({'status': 'erro'}, status=400)
-

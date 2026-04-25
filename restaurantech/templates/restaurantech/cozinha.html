@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Tablet da Cozinha</title>
+    <style>
+        body { font-family: sans-serif; background: #222; color: #fff; }
+        .grid { display: flex; flex-wrap: wrap; gap: 20px; padding: 20px; }
+        .card { background: #333; padding: 15px; border-radius: 8px; width: 250px; border-left: 5px solid #e74c3c; }
+        .card h3 { margin-top: 0; color: #e74c3c; }
+        .card ul { padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <h1>👨‍🍳 Pedidos na Cozinha</h1>
+    <div class="grid" id="painel-pedidos">
+        <!-- Os pedidos vão aparecer aqui magicamente -->
+    </div>
+
+    <script>
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/cozinha/');
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            if (data.tipo === 'novo_pedido') {
+                const painel = document.getElementById('painel-pedidos');
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                let itensHtml = '';
+                data.itens.forEach(item => {
+                    itensHtml += `<li>${item}</li>`;
+                });
+
+                card.innerHTML = `
+                    <h3>Mesa ${data.mesa}</h3>
+                    <p>Pedido #${data.pedido_id}</p>
+                    <ul>${itensHtml}</ul>
+                `;
+                
+                painel.appendChild(card);
+            }
+        };
+    </script>
+</body>
+</html>

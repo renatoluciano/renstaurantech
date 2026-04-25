@@ -115,10 +115,19 @@ def notificar_pronto(request):
 # 6. BILL REQUEST ROUTE
 @csrf_exempt
 def pedir_conta(request):
-    """Changes table status to BILL and alerts the waiter in real time."""
+    """Muda o status da mesa para CONTA e avisa o garçom em tempo real."""
     if request.method == 'POST':
         try:
             mesa_obj = Mesa.objects.get(numero=1)
+            
+            # 🚨 NOVA TRAVA DE SEGURANÇA AQUI:
+            # Verifica se o método property do Passo 18 resultou em zero
+            if mesa_obj.total_da_conta == 0:
+                return JsonResponse({
+                    'status': 'erro', 
+                    'mensagem': 'Você não pode pedir a conta sem ter feito nenhum pedido!'
+                }, status=400)
+            
             mesa_obj.status = 'CONTA'
             mesa_obj.save()
             
@@ -136,7 +145,8 @@ def pedir_conta(request):
             return JsonResponse({'status': 'sucesso'})
         except Exception as e:
             return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
-
+            
+    return JsonResponse({'status': 'erro'}, status=400)
 # 7. TABLE RELEASE ROUTE
 @csrf_exempt
 def liberar_mesa(request):

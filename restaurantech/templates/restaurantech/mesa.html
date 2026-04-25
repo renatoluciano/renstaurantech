@@ -14,6 +14,7 @@
     </style>
 </head>
 <body>
+    {% csrf_token %}
 
     <!-- LADO ESQUERDO: CARDÁPIO -->
     <div class="cardapio">
@@ -78,39 +79,67 @@
                 return;
             }
             
-            // Aqui estamos enviando a lista dinâmica que o usuário montou!
+            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
             fetch('/fazer-pedido/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken 
+                },
                 body: JSON.stringify({ itens: carrinho })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
             .then(data => {
                 alert("Pedido enviado com sucesso!");
                 carrinho = [];
                 atualizarVisualCarrinho();
+            })
+            .catch(error => {
+                alert(error.mensagem || "Ocorreu um erro ao enviar o pedido.");
+                console.error('Erro:', error);
             });
         }
-                // NOVA FUNÇÃO AQUI:
+
         function pedirConta() {
             if (!confirm("Você realmente deseja solicitar o fechamento da conta?")) {
                 return;
             }
 
+            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
             fetch('/pedir-conta/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken 
+                }
             })
-            .then(response => response.json())
+            .then(response => {
+                // Se o servidor recusar (como erro 400), ele cai aqui
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.status === 'sucesso') {
                     alert("O garçom foi notificado e logo trará sua conta!");
                     document.getElementById('conta-btn').disabled = true;
                     document.getElementById('conta-btn').innerText = "Conta Solicitada";
                 }
+            })
+            .catch(error => {
+                // Exibe a mensagem exata que o Django enviou ("Você não pode pedir a conta sem ter consumido...")
+                alert(error.mensagem || "Ocorreu um erro ao solicitar a conta.");
+                console.error('Erro:', error);
             });
         }
-
     </script>
 </body>
 </html>

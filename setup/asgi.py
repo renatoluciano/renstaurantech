@@ -1,12 +1,13 @@
 import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
+import restaurantech.routing
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'setup.settings')
 
-django_asgi_app = get_asgi_application()
-
 application = ProtocolTypeRouter({
-    "http": django_asgi_app,
-    # "websocket": URLRouter(suas_rotas_aqui), <-- Vamos ativar isso nos próximos passos!
+    "http": get_asgi_application(),
+    "websocket": URLRouter(
+        restaurantech.routing.websocket_urlpatterns
+    ),
 })
